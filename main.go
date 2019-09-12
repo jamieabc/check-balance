@@ -29,6 +29,8 @@ type transactions struct {
 	Balance int  `json:"balance"`
 }
 
+type balanceList map[string]float64
+
 func main() {
 	data, err := retrieveRemoteAddressHistory(address)
 	if nil != err {
@@ -49,17 +51,7 @@ func main() {
 		return
 	}
 
-	balance := make(map[string]float64)
-
-	for i := 0; i < len(txs.TxRefs); i++ {
-		tx := txs.TxRefs[i]
-		if isReceiverTrx(tx) || isReceiveFund(tx) {
-			continue
-		}
-		t, _ := time.Parse("2006-01-02T15:04:05Z", tx.Time)
-		day := t.Format("2006-01-02")
-		balance[day] += toCoin(tx.PrevValue - tx.Balance)
-	}
+	balance := parseTransactions(txs)
 	showBalance(balance)
 	fmt.Printf("current balance: %f\n", toCoin(txs.Balance))
 }
@@ -96,6 +88,20 @@ func writeDataToFile(fileName string, data []byte) error {
 
 func remoteURL(addr string) string {
 	return fmt.Sprintf("%s/%s/%s?%s", host, apiEndpoint, addr, query)
+}
+
+func parseTransactions(txs transactions) balanceList {
+	balance := make(balanceList)
+	for i := 0; i < len(txs.TxRefs); i++ {
+		tx := txs.TxRefs[i]
+		if isReceiverTrx(tx) || isReceiveFund(tx) {
+			continue
+		}
+		t, _ := time.Parse("2006-01-02T15:04:05Z", tx.Time)
+		day := t.Format("2006-01-02")
+		balance[day] += toCoin(tx.PrevValue - tx.Balance)
+	}
+	return balance
 }
 
 func isReceiverTrx(t tx) bool {
