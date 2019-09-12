@@ -17,12 +17,16 @@ type tx struct {
 }
 
 type transactions struct {
-	TxRefs  []tx `json:txrefs`
+	TxRefs  []tx `json:"txrefs"`
 	Balance int  `json:"balance"`
 }
 
+const (
+	fileName = "history.json"
+)
+
 func main() {
-	jsonFile, err := os.Open("history.json")
+	jsonFile, err := os.Open(fileName)
 	if nil != err {
 		fmt.Println(err)
 		return
@@ -32,21 +36,33 @@ func main() {
 	byteValue, _ := ioutil.ReadAll(jsonFile)
 	var txs transactions
 
-	json.Unmarshal(byteValue, &txs)
+	err = json.Unmarshal(byteValue, &txs)
+	if nil != err {
+		fmt.Printf("unmarshal json file with error: %s\n", err)
+		return
+	}
 
 	balance := make(map[string]float64)
 
 	for i := 0; i < len(txs.TxRefs); i++ {
 		tx := txs.TxRefs[i]
-		if 0 != tx.Input {
+		if isReceiverTrx(tx) || isReceiveFund(tx) {
 			continue
 		}
 		t, _ := time.Parse("2006-01-02T15:04:05Z", tx.Time)
-		balance[t.Format("2006-01-02")] +=
-			toCoin(tx.PrevValue - tx.Balance)
+		day := t.Format("2006-01-02")
+		balance[day] += toCoin(tx.PrevValue - tx.Balance)
 	}
 	showBalance(balance)
 	fmt.Printf("current balance: %f\n", toCoin(txs.Balance))
+}
+
+func isReceiverTrx(t tx) bool {
+	return 0 != t.Input
+}
+
+func isReceiveFund(t tx) bool {
+	return t.PrevValue < t.Balance
 }
 
 func toCoin(value int) float64 {
