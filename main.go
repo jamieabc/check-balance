@@ -4,9 +4,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
+	"net/http"
 	"sort"
 	"time"
+)
+
+const (
+	fileName    = "history.json"
+	host        = "https://api.blockcypher.com"
+	apiEndpoint = "v1/ltc/main/addrs"
+	query       = "limit=12000"
+	address     = "Laz6tpw5xNhXWdiFoTfg4RnVmvVqRSFmkK"
 )
 
 type tx struct {
@@ -21,22 +29,21 @@ type transactions struct {
 	Balance int  `json:"balance"`
 }
 
-const (
-	fileName = "history.json"
-)
-
 func main() {
-	jsonFile, err := os.Open(fileName)
+	data, err := retrieveRemoteAddressHistory(address)
 	if nil != err {
-		fmt.Println(err)
+		fmt.Printf("retrieve remote address history with error: %s\n", err)
 		return
 	}
-	defer jsonFile.Close()
 
-	byteValue, _ := ioutil.ReadAll(jsonFile)
+	err = writeDataToFile(fileName, data)
+	if nil != err {
+		fmt.Printf("write data to file with error: %s\n", err)
+		return
+	}
+
 	var txs transactions
-
-	err = json.Unmarshal(byteValue, &txs)
+	err = json.Unmarshal(data, &txs)
 	if nil != err {
 		fmt.Printf("unmarshal json file with error: %s\n", err)
 		return
@@ -55,6 +62,40 @@ func main() {
 	}
 	showBalance(balance)
 	fmt.Printf("current balance: %f\n", toCoin(txs.Balance))
+}
+
+func retrieveRemoteAddressHistory(address string) ([]byte, error) {
+	url := remoteURL(address)
+	client := http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if nil != err {
+		return nil, fmt.Errorf("new http request with error: %s", err)
+	}
+
+	req.Header.Set("User-Agent", "http")
+
+	res, err := client.Do(req)
+	if nil != err {
+		return nil, fmt.Errorf("do http request with error: %s", err)
+	}
+
+	body, err := ioutil.ReadAll(res.Body)
+	if nil != err {
+		return nil, fmt.Errorf("read body with error: %s", err)
+	}
+
+	return body, nil
+}
+
+func writeDataToFile(fileName string, data []byte) error {
+	return ioutil.WriteFile(fileName, data, 0644)
+}
+
+func remoteURL(addr string) string {
+	return fmt.Sprintf("%s/%s/%s?%s", host, apiEndpoint, addr, query)
 }
 
 func isReceiverTrx(t tx) bool {
